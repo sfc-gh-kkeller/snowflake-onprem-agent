@@ -1,0 +1,31 @@
+# Dockerfile for Tunnel Sidecar
+# Pure port forwarding service - no application logic
+
+# Build stage - use pixi to install dependencies
+FROM ghcr.io/prefix-dev/pixi:latest AS builder
+
+WORKDIR /app
+
+# Copy pixi configuration
+COPY pixi.toml pixi.lock ./
+
+# Install dependencies
+RUN pixi install --locked
+
+# Copy tunnel sidecar code
+COPY tunnel_sidecar.py ./
+
+# Runtime stage - minimal Ubuntu
+FROM ubuntu:24.04
+
+WORKDIR /app
+
+# Copy pixi environment and code from builder
+COPY --from=builder /app/.pixi /app/.pixi
+COPY --from=builder /app/tunnel_sidecar.py ./
+
+# Expose WebSocket port
+EXPOSE 8081
+
+# Run the tunnel sidecar
+CMD ["/app/.pixi/envs/default/bin/python", "tunnel_sidecar.py"]

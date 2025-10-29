@@ -1,0 +1,57 @@
+# Multi-stage build for Iceberg Agent
+FROM ghcr.io/prefix-dev/pixi:latest AS builder
+
+WORKDIR /app
+
+# Copy dependency files
+COPY pixi.toml pixi.lock ./
+
+# Install dependencies
+RUN pixi install --locked
+
+# Copy extension download script
+COPY download_extensions.py ./
+
+# Download DuckDB extensions using the script
+RUN /app/.pixi/envs/default/bin/python3 download_extensions.py
+
+# Copy application code
+COPY iceberg_agent.py ./
+
+# Final stage - minimal runtime image
+FROM ubuntu:24.04
+
+WORKDIR /app
+
+# Copy pixi environment and application
+COPY --from=builder /app/.pixi /app/.pixi
+COPY --from=builder /app/iceberg_agent.py ./
+
+# Copy pre-downloaded DuckDB extensions
+COPY --from=builder /root/.duckdb /root/.duckdb
+
+# Set environment variables
+ENV PATH="/app/.pixi/envs/default/bin:$PATH"
+ENV API_PORT=8090
+ENV ICEBERG_PORT=8181
+ENV S3_PORT=9000
+
+# Expose API port
+EXPOSE 8090
+
+# Create entrypoint script to add hostname mapping at runtime
+# (cannot modify /etc/hosts during build as it's read-only)
+RUN echo '#!/bin/sh\n\
+# Add hostname mapping for MinIO (resolves internal docker-compose references in Iceberg metadata)\n\
+if grep -q "127.0.0.1 minio" /etc/hosts 2>/dev/null; then\n\
+  echo "✅ Hostname mapping already exists"\n\
+else\n\
+  echo "127.0.0.1 minio" >> /etc/hosts 2>/dev/null || echo "⚠️  Cannot modify /etc/hosts (use --add-host minio:127.0.0.1)"\n\
+fi\n\
+# Run the iceberg agent\n\
+exec python iceberg_agent.py\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+# Run entrypoint script
+ENTRYPOINT ["/app/entrypoint.sh"]
+

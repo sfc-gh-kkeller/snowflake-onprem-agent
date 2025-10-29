@@ -1,0 +1,37 @@
+# Dockerfile for Snowflake Agent (REST API + WebSocket Server)
+# Runs in Snowflake Container Services
+
+FROM ghcr.io/prefix-dev/pixi:latest AS builder
+
+WORKDIR /app
+
+# Copy pixi configuration
+COPY pixi.toml pixi.lock ./
+
+# Install dependencies using pixi
+RUN pixi install --locked
+
+# Copy application files
+COPY snowflake_agent.py ./
+
+# Final stage
+FROM ubuntu:24.04
+
+WORKDIR /app
+
+# Copy pixi environment from builder
+COPY --from=builder /app/.pixi /app/.pixi
+COPY --from=builder /app/snowflake_agent.py ./
+
+# Expose ports
+EXPOSE 8080 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD /app/.pixi/envs/default/bin/python -c "import requests; requests.get('http://localhost:8080/health')"
+
+# Run Snowflake agent using pixi
+ENTRYPOINT ["/app/.pixi/envs/default/bin/python"]
+CMD ["snowflake_agent.py"]
+
+

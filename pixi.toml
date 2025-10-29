@@ -1,0 +1,85 @@
+[project]
+name = "snowflake-secure-tunnel"
+description = "Secure tunnel for querying on-premise databases from Snowflake"
+authors = ["Kevin Keller"]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64", "linux-aarch64", "osx-64"]
+
+[tasks]
+# Initialize PostgreSQL database
+init-db = { cmd = "initdb -D .pixi/postgres-data" }
+
+# Start PostgreSQL server
+start-postgres = { cmd = "postgres -D .pixi/postgres-data -p 5432" }
+
+# Create demo database with sample data
+setup-db = { cmd = """
+createdb -h localhost -p 5432 -U $USER test_db || true
+psql -h localhost -p 5432 -U $USER -d test_db -f demo-data/init.sql
+""", depends-on = ["start-postgres"] }
+
+# Start on-premise agent (connects to Snowflake)
+start-agent = { cmd = "cd onpremise-deployment && python onpremise_agent.py" }
+
+# Quick setup: Initialize and start PostgreSQL in background
+setup = { cmd = """
+if [ ! -d .pixi/postgres-data ]; then
+    echo '📊 Initializing PostgreSQL...'
+    initdb -D .pixi/postgres-data
+fi
+echo '🚀 Starting PostgreSQL...'
+postgres -D .pixi/postgres-data -p 5432 > .pixi/postgres.log 2>&1 &
+sleep 2
+echo '💾 Setting up demo database...'
+createdb -h localhost -p 5432 -U $USER test_db 2>/dev/null || true
+psql -h localhost -p 5432 -U $USER -d test_db -f demo-data/init.sql
+echo '✅ Setup complete! PostgreSQL is running.'
+echo ''
+echo 'Next steps:'
+echo '1. Configure: cp onpremise-deployment/env.example onpremise-deployment/.env'
+echo '2. Start agent: pixi run start-agent'
+""" }
+
+# Stop PostgreSQL
+stop-postgres = { cmd = "pkill -f 'postgres -D .pixi/postgres-data'" }
+
+# Clean up (stop PostgreSQL and remove data)
+clean = { cmd = "pkill -f 'postgres -D .pixi/postgres-data' || true && rm -rf .pixi/postgres-data .pixi/postgres.log" }
+
+# Iceberg tasks (NEW)
+start-iceberg = { cmd = "docker-compose -f docker-compose.iceberg.yml up -d" }
+stop-iceberg = { cmd = "docker-compose -f docker-compose.iceberg.yml down" }
+init-iceberg-data = { cmd = "python demo-data/init_iceberg.py", depends-on = ["start-iceberg"] }
+logs-iceberg = { cmd = "docker-compose -f docker-compose.iceberg.yml logs -f" }
+
+[dependencies]
+# Python
+python = ">=3.10"
+pip = ">=24.0"
+
+# PostgreSQL (for local testing only)
+postgresql = ">=16.0,<17"
+
+# Core dependencies for on-premise agent
+websockets = ">=12.0"        # WebSocket client
+cryptography = ">=41.0"      # Encryption (AES-256)
+requests = ">=2.31"          # HTTP requests (for token exchange)
+python-dotenv = ">=1.0"      # Environment variable management
+
+# Snowflake agent dependencies (only needed in container)
+asyncpg = ">=0.29"           # PostgreSQL async driver
+aiohttp = ">=3.9"            # HTTP server
+
+# Optional but recommended
+uvloop = ">=0.19"            # High-performance event loop
+snowflake-connector-python = ">=3.17.4,<4"
+
+# Iceberg dependencies (NEW)
+duckdb = ">=1.4.0"           # DuckDB for querying Iceberg (latest)
+pyiceberg = ">=0.6.0"        # PyIceberg for catalog interaction
+boto3 = ">=1.34"             # S3/MinIO client
+minio = ">=7.2"              # MinIO Python client
+pandas = ">=2.0"             # Data manipulation for demo
+sqlalchemy = ">=2.0"
+pyarrow = ">=10.0"
+brotli = ">=1.1"
