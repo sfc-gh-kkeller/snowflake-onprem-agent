@@ -85,14 +85,14 @@ if pgrep -f "postgres -D" > /dev/null; then
 else
     echo -e "${YELLOW}⚠ Pixi PostgreSQL not running${NC}"
     echo "Starting pixi PostgreSQL..."
-    pixi run postgres-start &
+    pixi run start-postgres &
     sleep 3
     
     if pgrep -f "postgres -D" > /dev/null; then
         echo -e "${GREEN}✓ Pixi PostgreSQL started${NC}"
     else
         echo -e "${RED}✗ Failed to start pixi PostgreSQL${NC}"
-        echo "Try manually: pixi run postgres-start"
+        echo "Try manually: pixi run start-postgres"
         exit 1
     fi
 fi
@@ -253,5 +253,7 @@ echo "  • Stop all: ./stop-demo.sh (or pkill -f onpremise_agent.py && docker c
 echo "  • Restart agent: pkill -f onpremise_agent.py && ./start-demo.sh"
 
 echo -e "\n${GREEN}✓ All systems ready for testing!${NC}"
+
+
 
 
