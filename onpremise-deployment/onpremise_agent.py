@@ -38,6 +38,7 @@ class OnPremiseAgent:
         self.snowflake_account = os.getenv('SNOWFLAKE_ACCOUNT')
         self.snowflake_account_url = os.getenv('SNOWFLAKE_ACCOUNT_URL')
         self.snowflake_role = os.getenv('SNOWFLAKE_ROLE')
+        self.snowflake_user = os.getenv('SNOWFLAKE_USER')  # Optional, for logging/reference only
         self.snowflake_pat = os.getenv('SNOWFLAKE_PAT')
         self.snowflake_token = None
         
@@ -65,6 +66,7 @@ class OnPremiseAgent:
         
         # Session management (for persistent connections)
         self.sessions = {}  # session_id -> {'reader': reader, 'writer': writer, 'task': task}
+        self.pending_session_data = {}  # session_id -> [messages] - buffer for early data
         
         # Connection pool for reusing TCP connections (session caching)
         self.connection_pool = {}  # f"{host}:{port}" -> list of {'reader': reader, 'writer': writer, 'last_used': time}
@@ -80,6 +82,7 @@ class OnPremiseAgent:
         logger.info("Configuration loaded:")
         logger.info(f"  Snowflake URL: {self.snowflake_url}")
         logger.info(f"  Snowflake Account: {self.snowflake_account}")
+        logger.info(f"  Snowflake User: {self.snowflake_user if self.snowflake_user else 'Not specified'}")
         logger.info(f"  Auth Mode: {'PAT Token' if self.snowflake_pat else 'Shared Secret'}")
         logger.info(f"  Port Mappings: {len(self.port_mappings)} configured")
         
@@ -104,15 +107,18 @@ class OnPremiseAgent:
         import json
         import os
         
-        config_file = os.path.join(os.path.dirname(__file__), 'port_mappings.json')
+        # Allow override via environment variable
+        config_filename = os.getenv('PORT_MAPPINGS_FILE', 'port_mappings.json')
+        config_file = os.path.join(os.path.dirname(__file__), config_filename)
         
         if os.path.exists(config_file):
+            logger.info(f"📋 Loading port mappings from: {config_filename}")
             with open(config_file, 'r') as f:
                 config = json.load(f)
                 return config.get('mappings', [])
         else:
             # Default mapping
-            logger.warning(f"⚠️  No port_mappings.json found, using defaults")
+            logger.warning(f"⚠️  No {config_filename} found, using defaults")
             return [
                 {
                     'local_port': 5432,
@@ -471,6 +477,7 @@ class OnPremiseAgent:
             message = json.loads(decrypted)
             
             msg_type = message.get('type')
+            logger.info(f"📥 Received message type: {msg_type}")
             
             if msg_type == 'session_create':
                 # Create a new persistent session
@@ -507,7 +514,7 @@ class OnPremiseAgent:
         remote_port = message.get('remote_port')
         
         try:
-            logger.debug(f"📨 Creating session {session_id} to {remote_host}:{remote_port}")
+            logger.info(f"📨 Creating session {session_id} to {remote_host}:{remote_port}")
             
             # ALWAYS create fresh connection (PostgreSQL is stateful, can't pool raw TCP)
             logger.info(f"🔌 Creating new connection to {remote_host}:{remote_port}")
@@ -537,7 +544,14 @@ class OnPremiseAgent:
             encrypted = self.encrypt_message(json.dumps(response))
             await self.websocket.send(encrypted)
             
-            logger.debug(f"✅ Session {session_id} created")
+            logger.info(f"✅ Session {session_id} created successfully")
+            
+            # Process any buffered data that arrived before session was created
+            if session_id in self.pending_session_data:
+                buffered_messages = self.pending_session_data.pop(session_id)
+                logger.info(f"📦 Processing {len(buffered_messages)} buffered messages for {session_id}")
+                for buffered_msg in buffered_messages:
+                    await self.handle_session_data(buffered_msg)
             
         except Exception as e:
             logger.error(f"❌ Failed to create session {session_id}: {e}")
@@ -559,7 +573,31 @@ class OnPremiseAgent:
         data_hex = message.get('data')
         
         if session_id not in self.sessions:
-            logger.warning(f"⚠️  Session {session_id} not found")
+            # Buffer the message - session_create might be arriving soon
+            if session_id not in self.pending_session_data:
+                self.pending_session_data[session_id] = []
+                logger.info(f"⏳ Buffering data for not-yet-created session {session_id}")
+            
+            self.pending_session_data[session_id].append(message)
+            
+            # If we've buffered too many messages (>5), it's a real problem
+            if len(self.pending_session_data[session_id]) > 5:
+                logger.warning(f"⚠️  Session {session_id} still not found after {len(self.pending_session_data[session_id])} messages - requesting reset")
+                
+                # Clear buffer and request reset
+                self.pending_session_data.pop(session_id, None)
+                
+                try:
+                    reset_msg = {
+                        'type': 'session_reset',
+                        'session_id': session_id,
+                        'reason': 'Session not found on agent (reconnect or restart)'
+                    }
+                    encrypted = self.encrypt_message(json.dumps(reset_msg))
+                    await self.websocket.send(encrypted)
+                    logger.info(f"📤 Sent session_reset for {session_id}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to send session_reset: {e}")
             return
         
         try:
@@ -579,6 +617,11 @@ class OnPremiseAgent:
     async def handle_session_close(self, message):
         """Close a session and return connection to pool"""
         session_id = message.get('session_id')
+        
+        # Clean up any pending buffered data
+        if session_id in self.pending_session_data:
+            self.pending_session_data.pop(session_id)
+            logger.debug(f"🧹 Cleared buffered data for closing session {session_id}")
         
         if session_id not in self.sessions:
             logger.debug(f"⚠️  Session {session_id} not found for closing")

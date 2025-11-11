@@ -48,9 +48,10 @@ fi
 echo ""
 echo -e "${BLUE}Status:${NC}"
 echo "  • Tunnel Agent: ✓ Stopped"
-echo "  • Docker Stack: Still running (use ./stop-demo.sh to stop all)"
-echo "  • Pixi PostgreSQL: Still running (use 'pixi run postgres-stop' if needed)"
+echo "  • Pixi PostgreSQL: Still running (use 'pixi run stop-postgres' if needed)"
 echo ""
-echo -e "${YELLOW}To restart agent:${NC} ./start-demo.sh"
+echo -e "${YELLOW}To restart agent:${NC} ./start-postgres-demo.sh"
+
+
 
 

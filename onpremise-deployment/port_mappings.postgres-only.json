@@ -1,0 +1,11 @@
+{
+  "mappings": [
+    {
+      "local_port": 5432,
+      "remote_host": "localhost",
+      "remote_port": 5432,
+      "description": "PostgreSQL"
+    }
+  ]
+}
+

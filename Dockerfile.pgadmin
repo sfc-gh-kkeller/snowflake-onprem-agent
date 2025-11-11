@@ -1,0 +1,18 @@
+# Dockerfile for pgAdmin - PostgreSQL Admin Tool
+# This will run in Snowflake Container Services to test the tunnel
+
+FROM dpage/pgadmin4:latest
+
+# Set environment variables
+ENV PGADMIN_DEFAULT_EMAIL=admin@snowflake.com
+ENV PGADMIN_DEFAULT_PASSWORD=admin123
+ENV PGADMIN_LISTEN_PORT=80
+ENV PGADMIN_CONFIG_SERVER_MODE=True
+ENV PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+
+# Expose web interface port
+EXPOSE 80
+
+# The base image already has the entrypoint configured
+# pgAdmin will start automatically
+

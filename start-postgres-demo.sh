@@ -1,13 +1,12 @@
 #!/bin/bash
 # ============================================================================
-# SnowAgent Demo Startup Script
+# SnowAgent PostgreSQL-Only Startup Script
 # ============================================================================
-# This script starts all components needed for local testing:
-# - Docker Iceberg stack (Lakekeeper, MinIO, PostgreSQL container)
-# - Pixi PostgreSQL (for tunnel demo)
-# - On-premise tunnel agent
+# This script starts only the PostgreSQL components (no Iceberg):
+# - Pixi PostgreSQL
+# - On-premise tunnel agent (PostgreSQL only)
 #
-# Usage: ./start-demo.sh
+# Usage: ./start-postgres-only.sh
 # ============================================================================
 
 set -e  # Exit on error
@@ -24,19 +23,14 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}"
 echo "═══════════════════════════════════════════════════════════"
-echo "  SnowAgent Demo Startup"
+echo "  SnowAgent PostgreSQL-Only Startup"
 echo "═══════════════════════════════════════════════════════════"
 echo -e "${NC}"
 
 # ============================================================================
 # Step 1: Check Prerequisites
 # ============================================================================
-echo -e "${YELLOW}[1/6] Checking prerequisites...${NC}"
-
-if ! command -v docker &> /dev/null; then
-    echo -e "${RED}✗ Docker not found. Please install Docker first.${NC}"
-    exit 1
-fi
+echo -e "${YELLOW}[1/3] Checking prerequisites...${NC}"
 
 if ! command -v pixi &> /dev/null; then
     echo -e "${RED}✗ Pixi not found. Please install Pixi first.${NC}"
@@ -46,38 +40,31 @@ fi
 echo -e "${GREEN}✓ Prerequisites OK${NC}"
 
 # ============================================================================
-# Step 2: Start Docker Iceberg Stack
+# Step 2: Initialize PostgreSQL Database (if needed)
 # ============================================================================
-echo -e "\n${YELLOW}[2/6] Starting Docker Iceberg stack (Lakekeeper, MinIO)...${NC}"
+echo -e "\n${YELLOW}[2/4] Checking PostgreSQL database initialization...${NC}"
 
-# Check if already running
-if docker ps | grep -q "iceberg-lakekeeper"; then
-    echo -e "${GREEN}✓ Iceberg stack already running${NC}"
-else
-    echo "Starting docker-compose..."
-    docker compose -f docker-compose.iceberg.yml up -d
+# Check if database cluster is initialized
+if [ ! -d ".pixi/postgres-data" ]; then
+    echo -e "${YELLOW}⚠ PostgreSQL not initialized${NC}"
+    echo "Initializing PostgreSQL database cluster..."
+    pixi run init-db
     
-    # Wait for services to be healthy
-    echo "Waiting for services to be healthy (max 60s)..."
-    for i in {1..60}; do
-        if docker ps | grep -q "iceberg-lakekeeper.*healthy" && \
-           docker ps | grep -q "iceberg-minio.*healthy"; then
-            echo -e "${GREEN}✓ Iceberg stack is healthy${NC}"
-            break
-        fi
-        if [ $i -eq 60 ]; then
-            echo -e "${RED}✗ Timeout waiting for services to be healthy${NC}"
-            echo "Check logs with: docker compose -f docker-compose.iceberg.yml logs"
-            exit 1
-        fi
-        sleep 1
-    done
+    if [ -d ".pixi/postgres-data" ]; then
+        echo -e "${GREEN}✓ PostgreSQL initialized${NC}"
+    else
+        echo -e "${RED}✗ Failed to initialize PostgreSQL${NC}"
+        echo "Try manually: pixi run init-db"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✓ PostgreSQL database cluster initialized${NC}"
 fi
 
 # ============================================================================
-# Step 3: Check Pixi PostgreSQL
+# Step 3: Start Pixi PostgreSQL
 # ============================================================================
-echo -e "\n${YELLOW}[3/6] Checking Pixi PostgreSQL...${NC}"
+echo -e "\n${YELLOW}[3/4] Checking Pixi PostgreSQL...${NC}"
 
 # Check if PostgreSQL is running
 if pgrep -f "postgres -D" > /dev/null; then
@@ -98,33 +85,9 @@ else
 fi
 
 # ============================================================================
-# Step 4: Verify Iceberg Data
+# Step 4: Verify PostgreSQL Demo Data
 # ============================================================================
-echo -e "\n${YELLOW}[4/6] Checking Iceberg demo data...${NC}"
-
-# Check if demo.sales table exists
-ICEBERG_CHECK=$(curl -s http://localhost:8181/catalog/v1/config?warehouse=demo 2>/dev/null || echo "")
-
-if [ -z "$ICEBERG_CHECK" ]; then
-    echo -e "${YELLOW}⚠ Lakekeeper not responding yet, waiting...${NC}"
-    sleep 5
-fi
-
-# Try to list tables
-TABLE_CHECK=$(curl -s http://localhost:8181/catalog/v1/9675dbc6-af14-11f0-8f08-87262cab6d95/namespaces/demo/tables 2>/dev/null || echo "")
-
-if echo "$TABLE_CHECK" | grep -q "sales"; then
-    echo -e "${GREEN}✓ Iceberg demo.sales table exists${NC}"
-else
-    echo -e "${YELLOW}⚠ Iceberg demo data not found. Seeding...${NC}"
-    pixi run duckdb < demo-data/lakekeeper_seed.sql
-    echo -e "${GREEN}✓ Iceberg data seeded${NC}"
-fi
-
-# ============================================================================
-# Step 5: Verify PostgreSQL Demo Data
-# ============================================================================
-echo -e "\n${YELLOW}[5/6] Checking PostgreSQL demo data...${NC}"
+echo -e "\n${YELLOW}[4/5] Checking PostgreSQL demo data...${NC}"
 
 # Check if test_user and test_db exist
 USER_EXISTS=$(pixi run psql -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='test_user'" 2>/dev/null || echo "")
@@ -159,9 +122,9 @@ else
 fi
 
 # ============================================================================
-# Step 6: Start On-Premise Agent
+# Step 5: Start On-Premise Tunnel Agent
 # ============================================================================
-echo -e "\n${YELLOW}[6/6] Starting on-premise tunnel agent...${NC}"
+echo -e "\n${YELLOW}[5/5] Starting on-premise tunnel agent...${NC}"
 
 # Check if agent is already running
 if pgrep -f "onpremise_agent.py" > /dev/null; then
@@ -172,19 +135,29 @@ fi
 
 # Check if config exists
 if [ ! -f "onpremise-deployment/.env" ]; then
-    if [ -f "onpremise-deployment/config.kevin.env" ]; then
-        echo "Copying config.kevin.env to .env..."
-        cp onpremise-deployment/config.kevin.env onpremise-deployment/.env
-    else
-        echo -e "${RED}✗ No config file found!${NC}"
-        echo "Please create onpremise-deployment/.env with your Snowflake credentials"
-        exit 1
-    fi
+    echo -e "${RED}✗ Configuration file not found!${NC}"
+    echo ""
+    echo "Please create: ${YELLOW}onpremise-deployment/.env${NC}"
+    echo ""
+    echo "You can use the template as a starting point:"
+    echo -e "  ${CYAN}cp onpremise-deployment/config.template.env onpremise-deployment/.env${NC}"
+    echo ""
+    echo "Then edit onpremise-deployment/.env with your Snowflake credentials:"
+    echo "  - SNOWFLAKE_URL (WebSocket endpoint from service)"
+    echo "  - SNOWFLAKE_ACCOUNT"
+    echo "  - SNOWFLAKE_PAT (Personal Access Token)"
+    echo "  - SNOWFLAKE_ROLE"
+    echo ""
+    echo "See config.template.env for detailed documentation"
+    echo ""
+    exit 1
 fi
 
-# Start agent in background
-echo "Starting agent (logging to /tmp/onpremise-agent.log)..."
-pixi run python onpremise-deployment/onpremise_agent.py > /tmp/onpremise-agent.log 2>&1 &
+echo -e "${GREEN}✓ Configuration file found: onpremise-deployment/.env${NC}"
+
+# Start agent in background with PostgreSQL-only port mappings
+echo "Starting agent with PostgreSQL-only port mappings (logging to /tmp/onpremise-agent.log)..."
+PORT_MAPPINGS_FILE=port_mappings.postgres-only.json pixi run python onpremise-deployment/onpremise_agent.py > /tmp/onpremise-agent.log 2>&1 &
 AGENT_PID=$!
 
 # Wait for agent to start
@@ -212,16 +185,11 @@ fi
 # ============================================================================
 echo -e "\n${BLUE}"
 echo "═══════════════════════════════════════════════════════════"
-echo "  Demo Environment Ready!"
+echo "  PostgreSQL Demo Environment Ready!"
 echo "═══════════════════════════════════════════════════════════"
 echo -e "${NC}"
 
 echo -e "${GREEN}Running Services:${NC}"
-echo "  • Docker Iceberg Stack:"
-echo "    - Lakekeeper (Iceberg REST): http://localhost:8181"
-echo "    - MinIO (S3): http://localhost:9000"
-echo "    - PostgreSQL (metadata): internal"
-echo ""
 echo "  • Pixi PostgreSQL:"
 echo "    - Port: 5432"
 echo "    - Database: test_db"
@@ -230,7 +198,8 @@ echo ""
 echo "  • On-Premise Tunnel Agent:"
 echo "    - Status: Running (PID: $AGENT_PID)"
 echo "    - Logs: /tmp/onpremise-agent.log"
-echo "    - Port Mappings: 5432, 8181, 9000"
+echo "    - Port Mappings: PostgreSQL (5432) only"
+echo "    - Config: port_mappings.postgres-only.json"
 
 echo -e "\n${YELLOW}Next Steps:${NC}"
 echo "  1. Check agent logs:"
@@ -238,22 +207,12 @@ echo "     tail -f /tmp/onpremise-agent.log"
 echo ""
 echo "  2. Test PostgreSQL query in Snowflake:"
 echo "     SELECT query_onpremise_v2('SELECT * FROM users LIMIT 5');"
-echo ""
-echo "  3. Test Iceberg query in Snowflake:"
-echo "     SELECT query_iceberg('SELECT * FROM demo.demo.sales LIMIT 3');"
-echo ""
-echo "  4. View service status:"
-echo "     docker compose -f docker-compose.iceberg.yml ps"
-echo "     ps aux | grep -E 'postgres|onpremise_agent'"
 
 echo -e "\n${YELLOW}Useful Commands:${NC}"
 echo "  • View agent logs: tail -f /tmp/onpremise-agent.log"
-echo "  • View docker logs: docker compose -f docker-compose.iceberg.yml logs -f"
-echo "  • Stop all: ./stop-demo.sh (or pkill -f onpremise_agent.py && docker compose -f docker-compose.iceberg.yml down)"
-echo "  • Restart agent: pkill -f onpremise_agent.py && ./start-demo.sh"
+echo "  • Stop agent: pkill -f onpremise_agent.py"
+echo "  • Stop PostgreSQL: pixi run stop-postgres"
+echo "  • Restart agent: pkill -f onpremise_agent.py && ./start-postgres-only.sh"
 
-echo -e "\n${GREEN}✓ All systems ready for testing!${NC}"
-
-
-
+echo -e "\n${GREEN}✓ PostgreSQL system ready for testing!${NC}"
 
