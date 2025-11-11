@@ -129,10 +129,8 @@ Open `SETUP-SNOWFLAKE-SERVICE.sql` in Snowflake and execute each section:
 - **Step 4:** Get the WebSocket endpoint (save this for your `.env` file!)
 
 ```sql
--- Open in SnowSQL or Snowflake UI
-snowsql -f SETUP-SNOWFLAKE-SERVICE.sql
-
--- Or execute step-by-step in Snowflake UI
+-- Open in Snowflake UI
+SETUP-SNOWFLAKE-SERVICE.sql
 ```
 
 **Key steps:**
@@ -192,14 +190,9 @@ This will:
 
 ### 5. Test the Tunnel
 
-```sql
--- Create UDF that queries on-premise PostgreSQL
-CREATE OR REPLACE FUNCTION query_onpremise_postgres(sql VARCHAR)
-RETURNS VARIANT
-...
 
 -- Query your on-premise database from Snowflake!
-SELECT query_onpremise_postgres('SELECT * FROM users');
+SELECT query_onpremise('SELECT * FROM users');
 ```
 
 ---
