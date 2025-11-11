@@ -192,6 +192,7 @@ This will:
 
 
 -- Query your on-premise database from Snowflake!
+```sql
 SELECT query_onpremise('SELECT * FROM users');
 ```
 
