@@ -443,17 +443,6 @@ The tunnel uses session-based connections:
 
 ## Advanced Topics
 
-### Archived Features
-
-The `archive_new/` directory contains additional components:
-
-- **Iceberg support** - Apache Iceberg REST catalog integration
-- **Discovery API** - Dynamic port mapping discovery
-- **pgAdmin testing** - Web-based PostgreSQL admin
-- **Reverse tunneling** - Browser → Container access (planned)
-- **OAuth integration** - Local portal with Snowflake OAuth (planned)
-
-See archived documentation for details.
 
 ### Custom Port Mappings
 
@@ -475,7 +464,7 @@ To add more services, update `port_mappings.postgres-only.json`:
 
 ### Documentation
 
-- See `archive_new/` for advanced guides
+
 - Check Snowflake docs: [Container Services](https://docs.snowflake.com/en/developer-guide/snowpark-container-services/overview)
 
 ### Logs
@@ -486,15 +475,6 @@ To add more services, update `port_mappings.postgres-only.json`:
 
 ---
 
-## License
-
-[Your License Here]
-
-## Contributing
-
-[Contributing Guidelines]
-
----
 
 ## Quick Reference
 
