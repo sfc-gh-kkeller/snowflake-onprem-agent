@@ -9,38 +9,55 @@ SnowAgent creates a secure, encrypted tunnel between Snowflake Container Service
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Snowflake Container Services                           │
-│                                                         │
-│ ┌─────────────────┐      ┌─────────────────────────┐  │
-│ │ PostgreSQL      │      │ Tunnel Sidecar          │  │
-│ │ Query Service   │─────►│ WebSocket Server        │  │
-│ │ (UDF Handler)   │      │ Port: 8081              │  │
-│ └─────────────────┘      └──────────┬──────────────┘  │
-│                                     │                  │
-└─────────────────────────────────────┼──────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│ Snowflake Container Services                                        │
+│                                                                      │
+│ ┌─────────────────┐      ┌─────────────────────────┐               │
+│ │ PostgreSQL      │      │ Tunnel Sidecar          │               │
+│ │ Query Service   │─────►│ - WebSocket: 8081       │               │
+│ │ Port: 8080      │      │   (PUBLIC - agent connects here)        │
+│ │ (internal)      │      │ - Tunnel ports: 5432... │               │
+│ └─────────────────┘      │   (INTERNAL - services use these)       │
+│                          └──────────┬──────────────┘               │
+│                                     │                               │
+│ ┌─────────────────┐                 │                               │
+│ │ pgAdmin         │                 │                               │
+│ │ (Optional Test) │────────────────►│                               │
+│ │ Port: 80        │  Connects to tunnel port 5432                  │
+│ └─────────────────┘  (internal: websocket-multi-db-service...5432) │
+│                                     │                               │
+└─────────────────────────────────────┼───────────────────────────────┘
                                       │ WSS (encrypted)
                             ┌─────────▼──────────┐
                             │ Firewall-Friendly  │
                             │ Outbound Connection│
                             └─────────┬──────────┘
                                       │
-┌─────────────────────────────────────┼──────────────────┐
-│ On-Premise                          │                  │
-│                                     │                  │
-│ ┌───────────────────────────────────▼────────────┐    │
-│ │ On-Premise Agent                               │    │
-│ │ - Initiates outbound WebSocket                 │    │
-│ │ - AES-256 + RSA-2048 encryption                │    │
-│ │ - Forwards to localhost:5432                   │    │
-│ └───────────────────┬────────────────────────────┘    │
-│                     │                                  │
-│ ┌───────────────────▼────────────────────────────┐    │
-│ │ PostgreSQL Database                            │    │
-│ │ localhost:5432                                 │    │
-│ └────────────────────────────────────────────────┘    │
-└──────────────────────────────────────────────────────┘
+┌─────────────────────────────────────┼───────────────────────────────┐
+│ On-Premise                          │                               │
+│                                     │                               │
+│ ┌───────────────────────────────────▼────────────┐                 │
+│ │ On-Premise Agent                               │                 │
+│ │ - Initiates outbound WebSocket                 │                 │
+│ │ - AES-256 + RSA-2048 encryption                │                 │
+│ │ - Forwards to localhost:5432                   │                 │
+│ └───────────────────┬────────────────────────────┘                 │
+│                     │                                               │
+│ ┌───────────────────▼────────────────────────────┐                 │
+│ │ PostgreSQL Database                            │                 │
+│ │ localhost:5432                                 │                 │
+│ │ - Demo database: test_db                       │                 │
+│ │ - Demo data: users table                       │                 │
+│ └────────────────────────────────────────────────┘                 │
+└────────────────────────────────────────────────────────────────────┘
 ```
+
+**Demo Components:**
+- **PostgreSQL Query Service** - UDF handler for programmatic queries
+- **Tunnel Sidecar** - WebSocket tunnel server with encrypted connection
+- **pgAdmin (Optional)** - Visual database browser to test the tunnel
+- **On-Premise Agent** - Tunnel client running locally
+- **PostgreSQL Database** - Local database with demo data
 
 ### Key Features
 
