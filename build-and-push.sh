@@ -60,34 +60,14 @@ echo -e "${CYAN}Architecture:${NC} linux/amd64 (Intel)"
 echo ""
 
 # ============================================================================
-# Check Docker Login
-# ============================================================================
-
-echo -e "${YELLOW}Checking Docker registry authentication...${NC}"
-
-if docker info 2>/dev/null | grep -q "Username"; then
-    echo -e "${GREEN}✓ Docker is logged in${NC}"
-else
-    echo -e "${YELLOW}⚠ Docker may not be authenticated${NC}"
-    echo ""
-    echo "If push fails, please login first:"
-    echo -e "${CYAN}  docker login $REGISTRY_HOST -u <username>${NC}"
-    echo ""
-    echo "When prompted for password, use your Snowflake Personal Access Token (PAT)"
-    echo ""
-    read -p "Press Enter to continue or Ctrl+C to cancel..."
-fi
-
-echo ""
-
-# ============================================================================
 # Image Definitions
 # ============================================================================
 
-declare -A IMAGES=(
-    ["postgresql-query"]="Dockerfile.postgresql_service.pixi"
-    ["tunnel-sidecar"]="Dockerfile.tunnel-sidecar.pixi"
-    ["pgadmin-test"]="Dockerfile.pgadmin"
+# Image name and Dockerfile pairs (compatible with bash 3.2+)
+IMAGES=(
+    "postgresql-query:Dockerfile.postgresql_service.pixi"
+    "tunnel-sidecar:Dockerfile.tunnel-sidecar.pixi"
+    "pgadmin-test:Dockerfile.pgadmin"
 )
 
 # ============================================================================
@@ -98,9 +78,10 @@ TOTAL=${#IMAGES[@]}
 CURRENT=0
 FAILED=()
 
-for IMAGE_NAME in "${!IMAGES[@]}"; do
+for IMAGE_PAIR in "${IMAGES[@]}"; do
     CURRENT=$((CURRENT + 1))
-    DOCKERFILE="${IMAGES[$IMAGE_NAME]}"
+    IMAGE_NAME="${IMAGE_PAIR%%:*}"
+    DOCKERFILE="${IMAGE_PAIR##*:}"
     
     echo -e "${BLUE}"
     echo "═══════════════════════════════════════════════════════════"
@@ -174,7 +155,8 @@ if [ ${#FAILED[@]} -eq 0 ]; then
     echo -e "${GREEN}✓ All images built and pushed successfully!${NC}"
     echo ""
     echo "Images available:"
-    for IMAGE_NAME in "${!IMAGES[@]}"; do
+    for IMAGE_PAIR in "${IMAGES[@]}"; do
+        IMAGE_NAME="${IMAGE_PAIR%%:*}"
         echo -e "  ${GREEN}✓${NC} $REGISTRY_URL/$IMAGE_NAME:$TAG"
     done
 else
@@ -204,13 +186,15 @@ echo "     - name: tunnel-sidecar"
 echo "       image: $REGISTRY_URL/tunnel-sidecar:$TAG"
 echo ""
 echo "2. Deploy service in Snowflake:"
-echo "   snowsql -f CREATE-SERVICE.sql"
+echo "   snowsql -f SETUP-SNOWFLAKE-SERVICE.sql"
+echo "   (or execute step-by-step in Snowflake UI)"
 echo ""
 echo "3. Get WebSocket endpoint:"
 echo "   snowsql -q \"SHOW ENDPOINTS IN SERVICE websocket_multi_db_service\""
 echo ""
-echo "4. (Optional) Deploy pgAdmin for testing:"
-echo "   Update and run CREATE-SERVICE-PGADMIN-TEST.sql from archive_new/"
+echo "4. Configure on-premise agent:"
+echo "   cp onpremise-deployment/config.template.env onpremise-deployment/.env"
+echo "   vim onpremise-deployment/.env  # Add SNOWFLAKE_URL, SNOWFLAKE_ACCOUNT, SNOWFLAKE_PAT"
 echo ""
 echo -e "${GREEN}Build complete!${NC}"
 echo ""

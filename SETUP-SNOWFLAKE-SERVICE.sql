@@ -1,15 +1,3 @@
--- ============================================================================
--- Snowflake WebSocket Tunnel Service - Setup Guide
--- ============================================================================
--- AUTHOR: KEVIN.KELLER@SNOWFLAKESECLAB42OUTLOOK.ONMICROSOFT.COM
---
--- This script walks through the complete setup process for deploying
--- the WebSocket tunnel service in Snowflake Container Services.
---
--- PREREQUISITES:
--- 1. Docker images built and pushed (see build-and-push.sh)
--- 2. On-premise PostgreSQL running (see start-postgres-demo.sh)
--- ============================================================================
 
 -- ============================================================================
 -- Step 1: Create Database, Schema, Role & Compute Pool
@@ -34,10 +22,19 @@ DESCRIBE COMPUTE POOL websocket_tunnel_pool;
 
 -- Create role for container service management
 CREATE ROLE IF NOT EXISTS DOCKERTEST;
+// If you want to check your username
+SELECT CURRENT_USER(); 
+
+
+GRANT ROLE DOCKERTEST TO USER *YOUR_USER*;
+
 
 -- Grant necessary permissions
 GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE dockertest;
+
 GRANT OWNERSHIP ON DATABASE websocket_test_db TO ROLE dockertest;
+
+USE ROLE DOCKERTEST;
 GRANT OWNERSHIP ON SCHEMA websocket_test_schema TO ROLE dockertest;
 GRANT USAGE ON DATABASE websocket_test_db TO ROLE accountadmin;
 GRANT USAGE ON SCHEMA websocket_test_schema TO ROLE accountadmin;
@@ -64,6 +61,8 @@ SHOW IMAGE REPOSITORIES IN SCHEMA;
 -- STOP HERE: Build and Push Docker Images
 -- ============================================================================
 -- Before proceeding, you must build and push the Docker images:
+--  docker login *YOUR_REPO_URL*  --> USER: SNOWFLAKE LOGIN_NAME +  PASSWORD: PAT
+--
 --
 -- ./build-and-push.sh <YOUR_REGISTRY_URL>
 --
@@ -83,7 +82,7 @@ SHOW IMAGE REPOSITORIES IN SCHEMA;
 -- 1. tunnel-sidecar: Handles WebSocket tunnel connections
 -- 2. postgresql-query: Executes PostgreSQL queries through the tunnel
 
-CREATE OR REPLACE SERVICE websocket_multi_db_service
+CREATE  SERVICE websocket_multi_db_service
   IN COMPUTE POOL websocket_tunnel_pool
   FROM SPECIFICATION $$
   spec:
@@ -96,7 +95,6 @@ CREATE OR REPLACE SERVICE websocket_multi_db_service
       env:
         WS_PORT: "8081"
         DISCOVERY_PORT: "8082"
-        HANDSHAKE_SECRET: "test-secret-key"
         SNOWFLAKE_ACCOUNT: "SFSENORTHAMERICA-SECFIELDKELLER"
       resources:
         requests:
@@ -246,7 +244,7 @@ SELECT query_onpremise('SELECT * FROM users LIMIT 5');
 -- Step 6 (OPTIONAL): Deploy pgAdmin for Visual Testing
 -- ============================================================================
 
-CREATE OR REPLACE SERVICE pgadmin_test_service
+CREATE  SERVICE pgadmin_test_service
   IN COMPUTE POOL websocket_tunnel_pool
   FROM SPECIFICATION $$
   spec:
@@ -278,6 +276,8 @@ CREATE OR REPLACE SERVICE pgadmin_test_service
 -- Check pgAdmin service status
 SELECT SYSTEM$GET_SERVICE_STATUS('pgadmin_test_service');
 SHOW ENDPOINTS IN SERVICE pgadmin_test_service;
+
+SHOW SERVICES;
 
 -- Access pgAdmin at the public endpoint shown above
 -- Login: admin@snowflake.com / admin123
