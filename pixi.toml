@@ -15,7 +15,7 @@ start-postgres = { cmd = "postgres -D .pixi/postgres-data -p 5432" }
 # Create demo database with sample data
 setup-db = { cmd = """
 createdb -h localhost -p 5432 -U $USER test_db || true
-psql -h localhost -p 5432 -U $USER -d test_db -f demo-data/init.sql
+psql -h localhost -p 5432 -U $USER -d test_db -f demo-data/init_postgres.sql
 """, depends-on = ["start-postgres"] }
 
 # Start on-premise agent (connects to Snowflake)
@@ -32,7 +32,7 @@ postgres -D .pixi/postgres-data -p 5432 > .pixi/postgres.log 2>&1 &
 sleep 2
 echo '💾 Setting up demo database...'
 createdb -h localhost -p 5432 -U $USER test_db 2>/dev/null || true
-psql -h localhost -p 5432 -U $USER -d test_db -f demo-data/init.sql
+psql -h localhost -p 5432 -U $USER -d test_db -f demo-data/init_postgres.sql
 echo '✅ Setup complete! PostgreSQL is running.'
 echo ''
 echo 'Next steps:'

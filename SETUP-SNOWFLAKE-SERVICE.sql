@@ -26,7 +26,7 @@ CREATE ROLE IF NOT EXISTS DOCKERTEST;
 SELECT CURRENT_USER(); 
 
 
-GRANT ROLE DOCKERTEST TO USER *YOUR_USER*;
+GRANT ROLE DOCKERTEST TO USER <YOUR_USERNAME>;
 
 
 -- Grant necessary permissions
@@ -55,19 +55,19 @@ CREATE IMAGE REPOSITORY IF NOT EXISTS websocket_images;
 SHOW IMAGE REPOSITORIES IN SCHEMA;
 
 -- Copy the repository URL from the output above
--- Example: sfsenorthamerica-secfieldkeller.registry.snowflakecomputing.com/websocket_test_db/websocket_test_schema/websocket_images
+-- Example: myorg-myaccount.registry.snowflakecomputing.com/websocket_test_db/websocket_test_schema/websocket_images
 
 -- ============================================================================
 -- STOP HERE: Build and Push Docker Images
 -- ============================================================================
 -- Before proceeding, you must build and push the Docker images:
---  docker login *YOUR_REPO_URL*  --> USER: SNOWFLAKE LOGIN_NAME +  PASSWORD: PAT
+--  docker login <YOUR_REGISTRY_HOST>  --> USER: SNOWFLAKE LOGIN_NAME + PASSWORD: PAT
 --
 --
 -- ./build-and-push.sh <YOUR_REGISTRY_URL>
 --
 -- Example:
--- ./build-and-push.sh sfsenorthamerica-secfieldkeller.registry.snowflakecomputing.com/websocket_test_db/websocket_test_schema/websocket_images
+-- ./build-and-push.sh myorg-myaccount.registry.snowflakecomputing.com/websocket_test_db/websocket_test_schema/websocket_images
 --
 -- This will build and push:
 -- - postgresql-query:latest
@@ -95,7 +95,7 @@ CREATE  SERVICE websocket_multi_db_service
       env:
         WS_PORT: "8081"
         DISCOVERY_PORT: "8082"
-        SNOWFLAKE_ACCOUNT: "SFSENORTHAMERICA-SECFIELDKELLER"
+        SNOWFLAKE_ACCOUNT: "<YOUR_ORG>-<YOUR_ACCOUNT>"
       resources:
         requests:
           memory: 256Mi
@@ -116,7 +116,7 @@ CREATE  SERVICE websocket_multi_db_service
         PG_HOST: "localhost"
         PG_PORT: "5432"
         PG_DATABASE: "test_db"
-        PG_USER: "kevin"
+        PG_USER: "<YOUR_PG_USER>"
         PG_PASSWORD: ""
       resources:
         requests:
@@ -202,10 +202,10 @@ CALL SYSTEM$GET_SERVICE_LOGS('websocket_multi_db_service', '0', 'tunnel-sidecar'
 SHOW ENDPOINTS IN SERVICE websocket_multi_db_service;
 
 -- Copy the 'websocket' endpoint URL (should start with https://)
--- Example: https://nnbennh-sfsenorthamerica-secfieldkeller.snowflakecomputing.app
+-- Example: https://xyz123-myorg-myaccount.snowflakecomputing.app
 --
 -- IMPORTANT: Change 'https://' to 'wss://' in your .env file!
--- Example: wss://nnbennh-sfsenorthamerica-secfieldkeller.snowflakecomputing.app
+-- Example: wss://xyz123-myorg-myaccount.snowflakecomputing.app
 
 -- ============================================================================
 -- STOP HERE: Configure and Start On-Premise Agent
@@ -290,7 +290,7 @@ SHOW SERVICES;
 -- Host: websocket-multi-db-service.mssi.svc.spcs.internal
 -- Port: 5432
 -- Database: test_db
--- Username: kevin
+-- Username: <your_pg_user>
 -- Password: (leave empty)
 --
 -- This connects pgAdmin (running in Snowflake) to your on-premise PostgreSQL

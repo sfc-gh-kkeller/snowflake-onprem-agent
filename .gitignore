@@ -1,0 +1,41 @@
+# Secrets and credentials
+.env
+*.env
+!config.template.env
+
+# Pixi environment and build artifacts
+.pixi/
+pixi.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Logs
+*.log
+/tmp/
+.pixi/postgres.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.tar
+
+# Local testing data
+postgres-data/
