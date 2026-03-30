@@ -1,55 +1,91 @@
 # Snowflake On-Premise Agent
 
-> Secure WebSocket tunnel for accessing on-premise databases from Snowflake Container Services
+> Secure encrypted tunnel connecting Snowflake to on-premise systems, cross-cloud resources, and data lakes — **No Private Link Required**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Overview
 
-Snowflake On-Premise Agent creates a secure, encrypted tunnel between Snowflake Container Services (SPCS) and your on-premise PostgreSQL database. Query your local databases directly from Snowflake UDFs without exposing them to the internet.
+Snowflake On-Premise Agent creates a secure, encrypted tunnel between Snowflake Container Services (SPCS) and any on-premise or cross-cloud system. Unlike traditional Private Link solutions that require complex infrastructure (reverse proxies, DMZ, VPN gateways), this solution uses **outbound-only connections** that work through firewalls and are easy to deploy.
 
-### Architecture
+### What Can You Connect?
+
+| Use Case | Description |
+|----------|-------------|
+| **Databases** | PostgreSQL, MySQL, SQL Server, Oracle — query on-prem databases from Snowflake |
+| **Cortex Agents** | Let AI agents call UDFs that access on-premise data sources |
+| **Iceberg Catalogs** | Connect to on-premise Apache Iceberg catalogs and data lakes |
+| **Data Pipelines** | Build ingestion pipelines from on-premise systems (NiFi, custom ETL) |
+| **Cross-Cloud** | Connect Snowflake accounts across AWS, Azure, and GCP |
+| **APIs & Services** | Access internal REST APIs, microservices, or legacy systems |
+
+### Who Is This For?
+
+- **All Snowflake customers** — No Business Critical edition or Private Link required
+- **Enterprises with strict security policies** — Outbound-only traffic, no inbound firewall rules needed
+- **Hybrid cloud architectures** — Keep sensitive data on-premise while leveraging Snowflake AI/ML
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│ Snowflake Container Services                                        │
-│                                                                     │
-│  ┌─────────────────┐       ┌──────────────────────┐                │
-│  │ PostgreSQL      │       │ Tunnel Sidecar       │                │
-│  │ Query Service   │──────▶│ WebSocket: 8081      │                │
-│  │ (Port 8080)     │       │ (Public Endpoint)    │                │
-│  └─────────────────┘       └──────────┬───────────┘                │
-│                                       │                             │
-└───────────────────────────────────────┼─────────────────────────────┘
-                                        │ WSS (TLS encrypted)
-                                        │
-┌───────────────────────────────────────┼─────────────────────────────┐
-│ On-Premise Network                    │                             │
-│                                       ▼                             │
-│  ┌────────────────────────────────────────────┐                    │
-│  │ On-Premise Agent                           │                    │
-│  │ • Initiates outbound WebSocket connection  │                    │
-│  │ • RSA-2048 key exchange + AES-256 tunnel   │                    │
-│  │ • Forwards traffic to localhost:5432       │                    │
-│  └───────────────────────┬────────────────────┘                    │
-│                          │                                          │
-│  ┌───────────────────────▼────────────────────┐                    │
-│  │ PostgreSQL Database (localhost:5432)       │                    │
-│  └────────────────────────────────────────────┘                    │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Snowflake Container Services (SPCS)                                         │
+│                                                                             │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌─────────────────────┐   │
+│  │ Your App         │    │ Cortex Agents    │    │ Notebooks           │   │
+│  │ (Streamlit, UDF) │    │ (AI + Tools)     │    │ (Python, SQL)       │   │
+│  └────────┬─────────┘    └────────┬─────────┘    └──────────┬──────────┘   │
+│           │                       │                         │               │
+│           └───────────────────────┼─────────────────────────┘               │
+│                                   ▼                                         │
+│                    ┌──────────────────────────┐                             │
+│                    │ SPCS Tunnel Sidecar      │                             │
+│                    │ (WebSocket Server)       │                             │
+│                    └────────────┬─────────────┘                             │
+└─────────────────────────────────┼───────────────────────────────────────────┘
+                                  │ WSS (TLS + AES-256 encrypted)
+                                  │
+┌─────────────────────────────────┼───────────────────────────────────────────┐
+│ Customer Network (On-Premise / Cross-Cloud)                                 │
+│                                 │                                           │
+│     ┌───────────────────────────▼──────────────────────────────┐           │
+│     │ On-Premise Agent                                          │           │
+│     │ • Initiates OUTBOUND WebSocket connection (firewall-safe) │           │
+│     │ • RSA-2048 key exchange + AES-256 tunnel encryption       │           │
+│     │ • Forwards TCP traffic to local services                  │           │
+│     └─────┬─────────────┬──────────────┬───────────────┬───────┘           │
+│           │             │              │               │                    │
+│           ▼             ▼              ▼               ▼                    │
+│     ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌─────────────┐             │
+│     │PostgreSQL│  │ MySQL    │  │ Iceberg   │  │ REST APIs   │             │
+│     │ :5432    │  │ :3306    │  │ Catalog   │  │ & Services  │             │
+│     └──────────┘  └──────────┘  └───────────┘  └─────────────┘             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Features
 
-- **Firewall-Friendly** — Outbound WebSocket connection only (no inbound ports)
+- **No Private Link Required** — Works for all Snowflake customers, any edition
+- **Firewall-Friendly** — Agent initiates outbound connections only (no inbound ports)
 - **End-to-End Encrypted** — RSA-2048 key exchange + AES-256 tunnel encryption
-- **Snowflake PAT Authentication** — Uses Personal Access Tokens for secure auth
-- **Session-Based** — Persistent TCP connections through WebSocket
-- **Auto-Reconnect** — Resilient connection with automatic recovery
-- **Zero Public Exposure** — Database never exposed to internet
+- **Proven Model** — Same pattern as PowerBI Gateway, Azure Integration Runtime, Fivetran Agent
+- **Multi-Service** — Connect multiple on-premise services through one tunnel
+- **Cross-Cloud** — Connect Snowflake accounts across different cloud providers
 
-## Quick Start
+### Why Not Private Link?
+
+| Challenge | Private Link | This Solution |
+|-----------|-------------|---------------|
+| Inbound traffic to customer network | Required | **Not required** |
+| Reverse proxy farm | Must deploy & maintain | **Not needed** |
+| DMZ configuration | Often required | **Not needed** |
+| Cost at scale | Expensive | **Minimal** |
+| Cross-cloud support | No | **Yes** |
+| Works for all customers | BC edition only | **All editions** |
+
+## Quick Start (PostgreSQL Demo)
+
+> **Note:** PostgreSQL is used as a demonstration. The tunnel works with any TCP-based service.
 
 ### Prerequisites
 
@@ -137,6 +173,51 @@ SNOWFLAKE_PAT=your-pat-token-here
 -- Query your on-premise PostgreSQL from Snowflake!
 SELECT query_onpremise('SELECT * FROM users LIMIT 5');
 SELECT query_onpremise('SELECT version()');
+```
+
+## Use Cases in Detail
+
+### Cortex Agents with On-Premise Data
+
+Let Snowflake Cortex AI agents query on-premise databases through custom tools:
+
+```sql
+-- Create a Cortex Agent that can query on-premise PostgreSQL
+CREATE CORTEX AGENT my_agent
+  TOOLS = (query_onpremise_tool)
+  ...;
+
+-- Agent can now answer: "Show me underpaid employees"
+-- by querying on-prem PostgreSQL (names, emails) + Snowflake (salaries)
+```
+
+### On-Premise Iceberg Catalog
+
+Connect to Apache Iceberg catalogs hosted on-premise or in other clouds:
+
+```python
+# In a Snowflake Notebook, query on-premise Iceberg via the tunnel
+from pyiceberg.catalog import load_catalog
+
+catalog = load_catalog("onprem", uri="http://localhost:8181")  # tunneled
+table = catalog.load_table("db.sales")
+df = table.scan().to_pandas()
+```
+
+### Data Ingestion Pipelines
+
+Use Apache NiFi or custom ETL running in SPCS to pull data from on-premise:
+
+```
+NiFi (in SPCS) → Tunnel → On-Prem Database → Snowflake Tables
+```
+
+### Cross-Cloud Connectivity
+
+Connect Snowflake accounts across AWS, Azure, and GCP:
+
+```
+Snowflake (AWS us-west-2) ←→ Tunnel ←→ Snowflake (Azure westeurope)
 ```
 
 ## Project Structure
@@ -235,7 +316,7 @@ pixi run psql -d test_db -c "SELECT version()"
 
 ### Network
 - **Outbound Only** — Agent initiates connection (firewall-friendly)
-- **No Public Exposure** — PostgreSQL never exposed to internet
+- **No Public Exposure** — On-premise services never exposed to internet
 - **TLS Transport** — WebSocket over TLS (WSS)
 
 ### Best Practices
@@ -253,6 +334,7 @@ Edit `onpremise-deployment/port_mappings.postgres-only.json` to add more service
   "mappings": [
     {"local_port": 5432, "remote_host": "localhost", "remote_port": 5432, "description": "PostgreSQL"},
     {"local_port": 3306, "remote_host": "localhost", "remote_port": 3306, "description": "MySQL"},
+    {"local_port": 8181, "remote_host": "localhost", "remote_port": 8181, "description": "Iceberg REST Catalog"},
     {"local_port": 6379, "remote_host": "localhost", "remote_port": 6379, "description": "Redis"}
   ]
 }
