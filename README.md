@@ -1,6 +1,6 @@
 # Snowflake On-Premise Agent
 
-> Secure encrypted tunnel connecting Snowflake to on-premise systems, cross-cloud resources, and data lakes — **No Private Link Required**
+> Secure encrypted tunnel connecting Snowflake to on-premise systems, cross-cloud resources, and data lakes
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -21,7 +21,7 @@ Snowflake On-Premise Agent creates a secure, encrypted tunnel between Snowflake 
 
 ### Who Is This For?
 
-- **All Snowflake customers** — No Business Critical edition or Private Link required
+- **All Snowflake customers** — Simple deployment without complex infrastructure
 - **Enterprises with strict security policies** — Outbound-only traffic, no inbound firewall rules needed
 - **Hybrid cloud architectures** — Keep sensitive data on-premise while leveraging Snowflake AI/ML
 
@@ -65,23 +65,11 @@ Snowflake On-Premise Agent creates a secure, encrypted tunnel between Snowflake 
 
 ### Key Features
 
-- **No Private Link Required** — Works for all Snowflake customers, any edition
 - **Firewall-Friendly** — Agent initiates outbound connections only (no inbound ports)
 - **End-to-End Encrypted** — RSA-2048 key exchange + AES-256 tunnel encryption
 - **Proven Model** — Same pattern as PowerBI Gateway, Azure Integration Runtime, Fivetran Agent
 - **Multi-Service** — Connect multiple on-premise services through one tunnel
 - **Cross-Cloud** — Connect Snowflake accounts across different cloud providers
-
-### Why Not Private Link?
-
-| Challenge | Private Link | This Solution |
-|-----------|-------------|---------------|
-| Inbound traffic to customer network | Required | **Not required** |
-| Reverse proxy farm | Must deploy & maintain | **Not needed** |
-| DMZ configuration | Often required | **Not needed** |
-| Cost at scale | Expensive | **Minimal** |
-| Cross-cloud support | No | **Yes** |
-| Works for all customers | BC edition only | **All editions** |
 
 ## Quick Start (PostgreSQL Demo)
 
